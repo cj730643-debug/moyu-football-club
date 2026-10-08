@@ -112,11 +112,11 @@ test('single-player pitch mounts, plays, pauses and reveals the stored result wi
         assert.equal(h.w.document.querySelector('.canvas-loading'), null);
         assert.ok(h.draws.some(([method]) => method === 'strokeRect'));
         await h.click('[aria-label="播放"]');
-        await h.advance(150); await h.advance(150);
+        for (let i=0; i<8; i++) await h.advance(150);
         const played = h.w.document.querySelector('.match-clock').textContent;
-        assert.match(played, /00:04/);
+        assert.match(played, /00:01/);
         await h.click('[aria-label="暂停"]'); await h.advance(150);
-        assert.equal(h.w.document.querySelector('.match-clock').textContent.replace('待播放', '比赛进行中'), played);
+        assert.equal(h.w.document.querySelector('.match-clock').textContent.replace('上半场 · 待播放', '上半场进行中'), played);
         await h.click('.solo-skip');
         assert.equal(h.finished(), 1);
         assert.match(h.w.document.querySelector('.scoreboard').textContent, /1\s*:\s*0/);
@@ -129,7 +129,7 @@ test('a restored single-player match opens at its saved minute and can be replay
     const h = await setup({ resume: 122 });
     try {
         assert.deepEqual(h.errors.map(error => error.message), []);
-        assert.match(h.w.document.querySelector('.match-clock').textContent, /02:02/);
+        assert.match(h.w.document.querySelector('.match-clock').textContent, /00:08/);
         assert.ok(h.calls.some(action => action.type === 'replay' && action.chunk === 2));
         await h.click('[aria-label="重新观看"]');
         assert.match(h.w.document.querySelector('.match-clock').textContent, /00:00/);
@@ -137,7 +137,7 @@ test('a restored single-player match opens at its saved minute and can be replay
     } finally { h.close(); }
 });
 
-test('online replay falls back to Canvas when the remote renderer cannot load, keeping the controls visible', async () => {
+test('online replay uses the built-in Canvas with no external renderer dependency', async () => {
     const h = await setup({ solo: false });
     try {
         assert.deepEqual(h.errors.map(error => error.message), []);
@@ -158,6 +158,39 @@ test('an unavailable Canvas leaves the score and a retry action visible instead 
         await h.click('.error button');
         assert.ok(h.w.document.querySelector('canvas'));
         assert.equal(h.w.document.querySelector('.error'), null);
+        assert.deepEqual(h.errors.map(error => error.message), []);
+    } finally { h.close(); }
+});
+
+
+test('halftime stops exactly at three minutes and resumes into the second half', async () => {
+    const h = await setup({ resume: 2699 });
+    try {
+        await h.click('[aria-label="播放"]'); await h.advance(150);
+        assert.match(h.w.document.querySelector('.match-clock').textContent, /03:00.*中场休息/);
+        assert.ok(h.w.document.querySelector('.halftime-overlay'));
+        await h.advance(150);
+        assert.match(h.w.document.querySelector('.match-clock').textContent, /03:00.*中场休息/);
+        await h.click('.halftime-overlay button'); await h.advance(150);
+        assert.equal(h.w.document.querySelector('.halftime-overlay'), null);
+        assert.match(h.w.document.querySelector('.match-clock').textContent, /下半场进行中/);
+        await h.click('[aria-label="重新观看"]');
+        assert.equal(h.w.document.querySelector('.halftime-overlay'), null);
+        assert.match(h.w.document.querySelector('.match-clock').textContent, /00:00/);
+        assert.deepEqual(h.errors.map(error => error.message), []);
+    } finally { h.close(); }
+});
+
+test('the player displays current stamina bars and the whole match ends at six minutes', async () => {
+    const h = await setup({ resume: 5399 });
+    try {
+        const stamina = h.draws.filter(([method, , , , height]) => method === 'fillRect' && height === 4);
+        assert.equal(stamina.length, 22);
+        assert.ok(stamina.every(([, , , width]) => width === 27));
+        assert.match(h.w.document.querySelector('.player-controls').textContent, /06:00/);
+        await h.click('[aria-label="播放"]'); await h.advance(150);
+        assert.match(h.w.document.querySelector('.match-clock').textContent, /06:00.*全场结束/);
+        assert.equal(h.w.document.querySelector('[aria-label="播放"]').disabled, true);
         assert.deepEqual(h.errors.map(error => error.message), []);
     } finally { h.close(); }
 });
