@@ -1,0 +1,40 @@
+{
+  "name": "moyu-football-club",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build --webpack",
+    "start": "next start --hostname 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint app components game lib tests scripts",
+    "test": "node --experimental-transform-types --test tests/*.test.ts tests/*.test.mjs",
+    "test:integration": "node --experimental-transform-types scripts/integration.ts",
+    "simulate": "node --experimental-transform-types scripts/calibrate.ts",
+    "build:standalone": "node scripts/build-standalone.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "1.31.0",
+    "next": "16.3.4",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "esbuild": "0.28.0",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.3.4",
+    "jsdom": "26.1.0",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.59.3"
+  }
+}

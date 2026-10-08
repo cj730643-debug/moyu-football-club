@@ -1,0 +1,3 @@
+project_id = "moyu-football-club"
+[functions.mfc-game]
+verify_jwt = true
