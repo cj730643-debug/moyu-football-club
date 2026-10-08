@@ -1,0 +1,12 @@
+node_modules
+.next/
+.env*
+!.env.example
+!.env.integration.example
+.vercel/
+*.tsbuildinfo
+test-results/
+
+.env.integration
+reports/*-private.json
+dist/
