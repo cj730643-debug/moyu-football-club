@@ -56,7 +56,7 @@ async function settleDOM() {
     for (let i = 0; i < 8; i++) await new Promise(resolve => setTimeout(resolve, 0));
 }
 
-async function setup({ solo = true, resume = 0, canvasFails = false, heldBall = false } = {}) {
+async function setup({ solo = true, resume = 0, canvasFails = false, heldBall = false, ballTransfers = false, emptyReplay = false } = {}) {
     const errors = [], calls = [], draws = [];
     const virtualConsole = new VirtualConsole();
     virtualConsole.on('jsdomError', error => errors.push(error));
@@ -86,8 +86,8 @@ async function setup({ solo = true, resume = 0, canvasFails = false, heldBall = 
     w.__replayAPI = async action => {
         calls.push(action);
         const chunk = action.chunk || 0;
-        const makeFrame = time => { const frame=f.frame(time); if(heldBall){ frame.owner=frame.p[0][0]; frame.ball=[frame.p[0][1]+40,frame.p[0][2]]; } return frame; };
-        return { ...f.meta, frames: [makeFrame(chunk * 60), makeFrame(Math.min(5400, chunk * 60 + 59))], events: [],
+        const makeFrame = time => { const frame=f.frame(time); if(ballTransfers){ const owner=frame.p[time<59?0:21]; frame.owner=owner[0]; frame.ball=[owner[1],owner[2]]; } if(heldBall){ frame.owner=frame.p[0][0]; frame.ball=[frame.p[0][1]+40,frame.p[0][2]]; } return frame; };
+        return { ...f.meta, frames: emptyReplay ? [] : [makeFrame(chunk * 60), makeFrame(Math.min(5400, chunk * 60 + 59))], events: [],
             ...(action.type === 'solo_skip' ? { last_viewed_second: 5400, result: [1, 0], frames: [f.frame(5400)] } : {}) };
     };
     w.eval(bundle.outputFiles[0].text);
@@ -202,16 +202,38 @@ test('the actual Canvas draws a held ball at the displayed player feet even when
     try {
         const circles=h.draws.filter(([method])=>method==='arc');
         const player=circles.find(([, , , radius])=>radius===13);
-        const ball=circles.find(([, , , radius])=>radius===5);
+        const ball=circles.find(([, , , radius])=>radius===7);
         assert.ok(player&&ball);
         assert.equal(ball[1]-player[1],10);
         assert.equal(ball[2]-player[2],10);
         await h.click('[aria-label="播放"]'); await h.advance(150);
         const newCircles=h.draws.filter(([method])=>method==='arc');
-        const lastBall=newCircles.findLast(([, , , radius])=>radius===5);
+        const lastBall=newCircles.findLast(([, , , radius])=>radius===7);
         const playerFrames=newCircles.filter(([, , , radius])=>radius===13);
         const owner=playerFrames[playerFrames.length-22];
         assert.equal(lastBall[1]-owner[1],10); assert.equal(lastBall[2]-owner[2],10);
+        assert.deepEqual(h.errors.map(e=>e.message),[]);
+    } finally {h.close();}
+});
+
+
+test('a new carrier across the pitch cannot make the visible ball jump or disappear', async () => {
+    const h=await setup({resume:58,ballTransfers:true});
+    try {
+        const balls=()=>h.draws.filter(([method,,,radius])=>method==='arc'&&radius===7);
+        const before=balls().at(-1); assert.ok(before);
+        await h.click('[aria-label="播放"]'); await h.advance(150); await h.advance(150);
+        const after=balls().at(-1); assert.ok(after);
+        assert.ok(Math.hypot(after[1]-before[1],after[2]-before[2])<=42.000001);
+        assert.ok(balls().length>1); assert.deepEqual(h.errors.map(e=>e.message),[]);
+    } finally {h.close();}
+});
+
+test('the pitch retains a visible ball while the first replay sample is loading', async () => {
+    const h=await setup({emptyReplay:true});
+    try {
+        assert.ok(h.draws.some(([method,x,y,radius])=>method==='arc'&&radius===7&&x===530&&y===340));
+        assert.ok(h.w.document.querySelector('canvas'));
         assert.deepEqual(h.errors.map(e=>e.message),[]);
     } finally {h.close();}
 });

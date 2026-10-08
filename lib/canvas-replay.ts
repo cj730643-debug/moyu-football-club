@@ -1,4 +1,4 @@
-import { smoothPitchPoint, ballOwner, heldBallPoint, type PitchPoint } from '../game/replay.ts';
+import { smoothPitchPoint, ballOwner, heldBallPoint, flightBallPoint, visibleBallPoint, type PitchPoint } from '../game/replay.ts';
 import { POSITIONS } from '../game/catalog.ts';
 import { nickname } from '../game/players.ts';
 import type { Club, Player, ReplayEvent, ReplayFrame } from '../game/types.ts';
@@ -19,6 +19,8 @@ export function mountReplayCanvas(host: HTMLDivElement, home: Club, away: Club, 
     let raf = 0, last = -1, hadFrame = false, previousTime = performance.now();
     const positions = new Map<string, PitchPoint>();
     let ball: PitchPoint | null = null;
+    let attachedOwner: string | null = null;
+    let lastFrame: ReplayFrame | null = null;
     const field = () => {
         ctx.fillStyle = '#182b24'; ctx.fillRect(0, 0, 1060, 680);
         for (let i=0; i<10; i++) { ctx.fillStyle = i%2 ? '#1b3028' : '#1e352c'; ctx.fillRect(40+i*98,40,98,600); }
@@ -32,10 +34,12 @@ export function mountReplayCanvas(host: HTMLDivElement, home: Club, away: Club, 
     const paint = (now = performance.now()) => {
         const elapsed = Math.min(.1, Math.max(0, (now - previousTime) / 1000));
         previousTime = now;
-        const { frame, second, events } = current();
+        const { frame: nextFrame, second, events } = current();
+        const frame = nextFrame || lastFrame;
+        if (nextFrame) lastFrame = nextFrame;
         if (second !== last || last === -1 || !hadFrame && frame) {
             const reset = !hadFrame || second < last || Math.abs(second - last) > 10;
-            if (reset) { positions.clear(); ball = null; }
+            if (reset) { positions.clear(); ball = null; attachedOwner = null; }
             last = second; hadFrame = !!frame; field();
             if (frame) {
                 for (const [id,x,y,fitness,removed] of frame.p) {
@@ -59,9 +63,13 @@ export function mountReplayCanvas(host: HTMLDivElement, home: Club, away: Club, 
                 const rawBall = { x: 40 + frame.ball[0] * 9.8, y: 40 + frame.ball[1] * 6 };
                 if (ownerPoint && ownerEntry) {
                     // Both pieces share one position. Independent smoothing made the ball float off the dribbler.
-                    ball = heldBallPoint(ownerPoint, ownerEntry.home);
+                    const target = heldBallPoint(ownerPoint, ownerEntry.home);
+                    ball = !ball || attachedOwner === owner ? target : flightBallPoint(ball, target, elapsed);
+                    if (Math.hypot(ball.x-target.x,ball.y-target.y) < .01) attachedOwner = owner;
+                    else attachedOwner = null;
                 } else {
-                    ball = ball ? smoothPitchPoint(ball, rawBall, elapsed, 420) : rawBall;
+                    attachedOwner = null;
+                    ball = ball ? flightBallPoint(ball, rawBall, elapsed) : rawBall;
                     const trail = events.findLast(e => e.time <= second && second-e.time < 3 && ['PASS','CROSS','SHOT'].includes(e.type));
                     const origin = trail?.player ? positions.get(trail.player) : null;
                     if (trail && origin) {
@@ -69,9 +77,12 @@ export function mountReplayCanvas(host: HTMLDivElement, home: Club, away: Club, 
                         ctx.beginPath(); ctx.moveTo(origin.x,origin.y); ctx.lineTo(ball.x,ball.y); ctx.stroke();
                     }
                 }
-                ctx.fillStyle='#f5f3e9'; ctx.strokeStyle='#0a1510'; ctx.lineWidth=1.4;
-                ctx.beginPath(); ctx.arc(ball.x,ball.y,5,0,Math.PI*2); ctx.fill(); ctx.stroke();
             }
+            // Draw the ball last and keep it visible while a new replay sample is loading.
+            ball = visibleBallPoint(ball || {x:530,y:340}, {x:530,y:340});
+            ctx.fillStyle='#ffffff'; ctx.strokeStyle='#07110c'; ctx.lineWidth=2.5;
+            ctx.beginPath(); ctx.arc(ball.x,ball.y,7,0,Math.PI*2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle='#657069'; ctx.beginPath(); ctx.arc(ball.x,ball.y,2,0,Math.PI*2); ctx.fill();
         }
         raf=requestAnimationFrame(paint);
     };

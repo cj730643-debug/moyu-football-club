@@ -38,3 +38,13 @@ test('owned balls stay attached and explicit loose balls are never assigned to n
     assert.equal(ballOwner(frame),'owner');
     assert.equal(ballOwner(frameAt([{...base,owner:'owner'}, {...base,t:1,owner:null,ball:[60,40]}],1)!),null);
 });
+
+test('possession transfers stay continuous and bad or off-pitch coordinates remain visible', async () => {
+    const {flightBallPoint,visibleBallPoint}=await import('../game/replay.ts');
+    const previous={x:100,y:200},target={x:900,y:600};
+    const next=flightBallPoint(previous,target,1/60);
+    assert.ok(Math.hypot(next.x-previous.x,next.y-previous.y)<=7.000001);
+    assert.deepEqual(flightBallPoint(previous,target,0),previous);
+    assert.deepEqual(visibleBallPoint({x:NaN,y:Infinity},previous),previous);
+    assert.deepEqual(visibleBallPoint({x:-100,y:800},previous),{x:25,y:655});
+});

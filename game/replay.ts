@@ -59,3 +59,15 @@ export function ballOwner(frame: ReplayFrame): string | null {
 export function heldBallPoint(player: PitchPoint, attacksRight: boolean): PitchPoint {
     return { x: player.x + (attacksRight ? 10 : -10), y: player.y + 10 };
 }
+
+
+/** A change of possessor is a visible transfer, never an instantaneous screen jump. */
+export function flightBallPoint(previous: PitchPoint, target: PitchPoint, elapsed: number): PitchPoint {
+    const dx=target.x-previous.x, dy=target.y-previous.y, distance=Math.hypot(dx,dy);
+    const step=Math.min(distance, Math.max(0,elapsed)*420);
+    return distance > 0 ? {x:previous.x+dx/distance*step,y:previous.y+dy/distance*step} : target;
+}
+export function visibleBallPoint(point: PitchPoint, fallback: PitchPoint): PitchPoint {
+    return { x: Math.max(25,Math.min(1035,Number.isFinite(point.x)?point.x:fallback.x)),
+        y: Math.max(25,Math.min(655,Number.isFinite(point.y)?point.y:fallback.y)) };
+}
