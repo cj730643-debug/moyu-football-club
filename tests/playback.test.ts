@@ -21,3 +21,20 @@ test('large recorded position changes move at a bounded visual speed instead of 
     assert.deepEqual(smoothPitchPoint(start, target, 0, 120), start);
     assert.deepEqual(smoothPitchPoint(start, start, 1/60, 120), start);
 });
+
+test('owned balls stay attached and explicit loose balls are never assigned to nearby players', async () => {
+    const { ballOwner, heldBallPoint, frameAt } = await import('../game/replay.ts');
+    const players: import('../game/types.ts').ReplayFrame['p'] = [['owner', 30, 40, 90, 0], ['other', 80, 80, 90, 0]];
+    const base = { t: 0, phase: 'open_play', p: players, ball: [30, 40] as [number,number] };
+    assert.equal(ballOwner({...base, owner: 'owner'}), 'owner');
+    assert.equal(ballOwner({...base, owner: null}), null);
+    assert.equal(ballOwner(base), 'owner');
+    assert.equal(ballOwner({...base, ball: [50,50]}), null);
+    assert.equal(ballOwner({...base, owner: 'missing'}), null);
+    const held = heldBallPoint({x:100,y:200}, true);
+    assert.ok(Math.hypot(held.x-100,held.y-200) < 15);
+    assert.deepEqual(heldBallPoint({x:100,y:200},false),{x:90,y:210});
+    const frame = frameAt([{...base,owner:'owner'}, {...base,t:1,owner:null,ball:[60,40]}], .5)!;
+    assert.equal(ballOwner(frame),'owner');
+    assert.equal(ballOwner(frameAt([{...base,owner:'owner'}, {...base,t:1,owner:null,ball:[60,40]}],1)!),null);
+});

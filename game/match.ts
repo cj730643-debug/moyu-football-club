@@ -9,7 +9,7 @@ import { FORMATIONS, TRAIT_MAP } from './catalog.ts';
 import { rng, scopeSeed, clamp, int } from './random.ts';
 import type { Club, Player, Position, Replay, ReplayEvent, PlayerStat, Tactic, TeamStats } from './types.ts';
 export const ENGINE_VERSION = 'football-simulator@39529b1+mfc.3';
-export const SIM_VERSION = 'mfc-adapter.5-fair-recovery';
+export const SIM_VERSION = 'mfc-adapter.6-ball-ownership';
 const roles: Record<Position, EP> = { GK: EP.GK, CB: EP.CB, FB: EP.LB, DM: EP.DM, CM: EP.CM, AM: EP.COM, W: EP.LW, ST: EP.ST };
 function roleAt(pos: Position, index: number, all: Position[]) { const occurrence = all.slice(0, index).filter(p => p === pos).length; const count = all.filter(p => p === pos).length; if (pos === 'FB')
     return occurrence === 0 ? EP.LB : EP.RB; if (pos === 'CB' && count >= 2)
@@ -150,7 +150,7 @@ export async function simulateMatch(home: Club, away: Club, seed: number, match_
         }
         if (options.frames !== false && (s.time - lastFrame >= 1 || s.phase === 'full_time' || s.phase === 'half_time')) {
             lastFrame = s.time;
-            frames.push({ t: s.time, ball: [Math.round(clamp(s.ball.x / 105 * 100, 0, 100) * 10) / 10, Math.round(clamp(s.ball.y / 68 * 100, 0, 100) * 10) / 10], p: s.players.map(p => [engineIds.get(p.id)!, Math.round(clamp(p.x / 105 * 100, 0, 100) * 10) / 10, Math.round(clamp(p.y / 68 * 100, 0, 100) * 10) / 10, Math.round(p.stamina), p.redCard ? 1 : 0]), phase: s.phase });
+            frames.push({ t: s.time, owner: s.ball.ownerId ? engineIds.get(s.ball.ownerId) || null : null, ball: [Math.round(clamp(s.ball.x / 105 * 100, 0, 100) * 10) / 10, Math.round(clamp(s.ball.y / 68 * 100, 0, 100) * 10) / 10], p: s.players.map(p => [engineIds.get(p.id)!, Math.round(clamp(p.x / 105 * 100, 0, 100) * 10) / 10, Math.round(clamp(p.y / 68 * 100, 0, 100) * 10) / 10, Math.round(p.stamina), p.redCard ? 1 : 0]), phase: s.phase });
         }
     };
     consume(engine.start(), engine.events);

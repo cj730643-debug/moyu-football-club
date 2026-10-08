@@ -56,7 +56,7 @@ async function settleDOM() {
     for (let i = 0; i < 8; i++) await new Promise(resolve => setTimeout(resolve, 0));
 }
 
-async function setup({ solo = true, resume = 0, canvasFails = false } = {}) {
+async function setup({ solo = true, resume = 0, canvasFails = false, heldBall = false } = {}) {
     const errors = [], calls = [], draws = [];
     const virtualConsole = new VirtualConsole();
     virtualConsole.on('jsdomError', error => errors.push(error));
@@ -86,7 +86,8 @@ async function setup({ solo = true, resume = 0, canvasFails = false } = {}) {
     w.__replayAPI = async action => {
         calls.push(action);
         const chunk = action.chunk || 0;
-        return { ...f.meta, frames: [f.frame(chunk * 60), f.frame(Math.min(5400, chunk * 60 + 59))], events: [],
+        const makeFrame = time => { const frame=f.frame(time); if(heldBall){ frame.owner=frame.p[0][0]; frame.ball=[frame.p[0][1]+40,frame.p[0][2]]; } return frame; };
+        return { ...f.meta, frames: [makeFrame(chunk * 60), makeFrame(Math.min(5400, chunk * 60 + 59))], events: [],
             ...(action.type === 'solo_skip' ? { last_viewed_second: 5400, result: [1, 0], frames: [f.frame(5400)] } : {}) };
     };
     w.eval(bundle.outputFiles[0].text);
@@ -193,4 +194,24 @@ test('the player displays current stamina bars and the whole match ends at six m
         assert.equal(h.w.document.querySelector('[aria-label="播放"]').disabled, true);
         assert.deepEqual(h.errors.map(error => error.message), []);
     } finally { h.close(); }
+});
+
+
+test('the actual Canvas draws a held ball at the displayed player feet even when raw positions disagree', async () => {
+    const h = await setup({heldBall:true});
+    try {
+        const circles=h.draws.filter(([method])=>method==='arc');
+        const player=circles.find(([, , , radius])=>radius===13);
+        const ball=circles.find(([, , , radius])=>radius===5);
+        assert.ok(player&&ball);
+        assert.equal(ball[1]-player[1],10);
+        assert.equal(ball[2]-player[2],10);
+        await h.click('[aria-label="播放"]'); await h.advance(150);
+        const newCircles=h.draws.filter(([method])=>method==='arc');
+        const lastBall=newCircles.findLast(([, , , radius])=>radius===5);
+        const playerFrames=newCircles.filter(([, , , radius])=>radius===13);
+        const owner=playerFrames[playerFrames.length-22];
+        assert.equal(lastBall[1]-owner[1],10); assert.equal(lastBall[2]-owner[2],10);
+        assert.deepEqual(h.errors.map(e=>e.message),[]);
+    } finally {h.close();}
 });

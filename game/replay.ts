@@ -20,7 +20,7 @@ export function frameAt(frames: ReplayFrame[], second: number): ReplayFrame | nu
     else
         hi = mid - 1;
 } const a = frames[lo], b = frames[lo + 1]; if (!b || b.t === a.t)
-    return a; const f = Math.max(0, Math.min(1, (second - a.t) / (b.t - a.t))); return { t: second, phase: a.phase, ball: [a.ball[0] + (b.ball[0] - a.ball[0]) * f, a.ball[1] + (b.ball[1] - a.ball[1]) * f], p: a.p.map(p => { const q = b.p.find(q => q[0] === p[0]); if (!q)
+    return a; const f = Math.max(0, Math.min(1, (second - a.t) / (b.t - a.t))); return { t: second, owner: a.owner, phase: a.phase, ball: [a.ball[0] + (b.ball[0] - a.ball[0]) * f, a.ball[1] + (b.ball[1] - a.ball[1]) * f], p: a.p.map(p => { const q = b.p.find(q => q[0] === p[0]); if (!q)
         return p; return [p[0], p[1] + (q[1] - p[1]) * f, p[2] + (q[2] - p[2]) * f, p[3], p[4]]; }) }; }
 export const clock = (second: number) => `${Math.floor(second / 60).toString().padStart(2, '0')}:${Math.floor(second % 60).toString().padStart(2, '0')}`;
 
@@ -40,4 +40,22 @@ export function smoothPitchPoint(previous: PitchPoint, target: PitchPoint, elaps
     const distance = Math.hypot(dx, dy);
     const step = Math.min(distance * (1 - Math.exp(-elapsed * 12)), maxSpeed * elapsed);
     return distance > 0 ? { x: previous.x + dx / distance * step, y: previous.y + dy / distance * step } : previous;
+}
+
+
+/** New recordings keep real ownership. Older recordings infer only close contact, never a distant player. */
+export function ballOwner(frame: ReplayFrame): string | null {
+    if (frame.owner !== undefined) return frame.p.some(p => p[0] === frame.owner && !p[4]) ? frame.owner : null;
+    let closest: string | null = null, distance = 18;
+    for (const p of frame.p) {
+        if (p[4]) continue;
+        const d = Math.hypot((p[1] - frame.ball[0]) * 9.8, (p[2] - frame.ball[1]) * 6);
+        if (d < distance) { closest = p[0]; distance = d; }
+    }
+    return closest;
+}
+
+/** Anchor a held ball to the displayed player, rather than separately smoothing it away from their feet. */
+export function heldBallPoint(player: PitchPoint, attacksRight: boolean): PitchPoint {
+    return { x: player.x + (attacksRight ? 10 : -10), y: player.y + 10 };
 }

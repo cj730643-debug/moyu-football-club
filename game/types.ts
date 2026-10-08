@@ -219,6 +219,8 @@ export interface ReplayEvent {
     chance?: number;
 }
 export interface ReplayFrame {
+    /** Undefined identifies older recordings; null explicitly means the ball is loose. */
+    owner?: string | null;
     t: number;
     ball: [
         number,

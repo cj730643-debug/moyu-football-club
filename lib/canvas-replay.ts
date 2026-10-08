@@ -1,4 +1,4 @@
-import { smoothPitchPoint, type PitchPoint } from '../game/replay.ts';
+import { smoothPitchPoint, ballOwner, heldBallPoint, type PitchPoint } from '../game/replay.ts';
 import { POSITIONS } from '../game/catalog.ts';
 import { nickname } from '../game/players.ts';
 import type { Club, Player, ReplayEvent, ReplayFrame } from '../game/types.ts';
@@ -14,8 +14,8 @@ export function mountReplayCanvas(host: HTMLDivElement, home: Club, away: Club, 
     if (!ctx) throw new Error('浏览器无法绘制比赛，请使用 Chrome 或 Edge');
     ctx.scale(ratio, ratio);
     host.replaceChildren(canvas);
-    const roster = new Map([...players.home.map(p => [p.id, { p, color: home.color }] as const),
-        ...players.away.map(p => [p.id, { p, color: away.color }] as const)]);
+    const roster = new Map<string, { p: Player; color: string; home: boolean }>([...players.home.map(p => [p.id, { p, color: home.color, home: true }] as const),
+        ...players.away.map(p => [p.id, { p, color: away.color, home: false }] as const)]);
     let raf = 0, last = -1, hadFrame = false, previousTime = performance.now();
     const positions = new Map<string, PitchPoint>();
     let ball: PitchPoint | null = null;
@@ -38,10 +38,6 @@ export function mountReplayCanvas(host: HTMLDivElement, home: Club, away: Club, 
             if (reset) { positions.clear(); ball = null; }
             last = second; hadFrame = !!frame; field();
             if (frame) {
-                const ballTarget = { x: 40 + frame.ball[0] * 9.8, y: 40 + frame.ball[1] * 6 };
-                ball = ball ? smoothPitchPoint(ball, ballTarget, elapsed, 320) : ballTarget;
-                const trail = events.findLast(e=>e.time<=second && second-e.time<1.5 && ['PASS','CROSS','SHOT'].includes(e.type));
-                if (trail) { ctx.strokeStyle = trail.type==='SHOT'?'#e6cd8b99':'#b6cda399'; ctx.beginPath(); ctx.moveTo(40+trail.x*9.8,40+trail.y*6); ctx.lineTo(ball.x,ball.y); ctx.stroke(); }
                 for (const [id,x,y,fitness,removed] of frame.p) {
                     const entry = roster.get(id); if (!entry || removed) continue;
                     const target = { x: 40+x*9.8, y: 40+y*6 };
@@ -56,6 +52,22 @@ export function mountReplayCanvas(host: HTMLDivElement, home: Club, away: Club, 
                     ctx.fillStyle = '#0a1510'; ctx.fillRect(point.x-16,point.y-24,32,6);
                     ctx.fillStyle = stamina > 60 ? '#a8d875' : stamina > 30 ? '#e0bd65' : '#e57c73';
                     ctx.fillRect(point.x-15,point.y-23,30*stamina/100,4);
+                }
+                const owner = ballOwner(frame);
+                const ownerPoint = owner ? positions.get(owner) : null;
+                const ownerEntry = owner ? roster.get(owner) : null;
+                const rawBall = { x: 40 + frame.ball[0] * 9.8, y: 40 + frame.ball[1] * 6 };
+                if (ownerPoint && ownerEntry) {
+                    // Both pieces share one position. Independent smoothing made the ball float off the dribbler.
+                    ball = heldBallPoint(ownerPoint, ownerEntry.home);
+                } else {
+                    ball = ball ? smoothPitchPoint(ball, rawBall, elapsed, 420) : rawBall;
+                    const trail = events.findLast(e => e.time <= second && second-e.time < 3 && ['PASS','CROSS','SHOT'].includes(e.type));
+                    const origin = trail?.player ? positions.get(trail.player) : null;
+                    if (trail && origin) {
+                        ctx.strokeStyle = trail.type==='SHOT' ? '#e6cd8b55' : '#b6cda333'; ctx.lineWidth=1;
+                        ctx.beginPath(); ctx.moveTo(origin.x,origin.y); ctx.lineTo(ball.x,ball.y); ctx.stroke();
+                    }
                 }
                 ctx.fillStyle='#f5f3e9'; ctx.strokeStyle='#0a1510'; ctx.lineWidth=1.4;
                 ctx.beginPath(); ctx.arc(ball.x,ball.y,5,0,Math.PI*2); ctx.fill(); ctx.stroke();
